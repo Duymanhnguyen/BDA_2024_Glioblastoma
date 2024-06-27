@@ -1,0 +1,139 @@
+---
+title: "BDA_2024_MetaAnalysis_Glioblastoma"
+author: "Duy Nguyen"
+date: "2024-06-25"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE)
+```
+
+### 1) Project Set Up
+
+```{r setdw, eval = FALSE, echo = FALSE}
+# Set working directory 
+setdw("/Users/manhduynguyen/BDA_2024_Glioblastoma")
+```
+
+
+```{r renv, eval = FALSE, echo = FALSE}
+# Initiate the project with renv
+renv::init()
+
+# Save to lockfile
+renv::snapshot()
+```
+
+
+```{r install_pack, eval = FALSE, echo = FALSE}
+# Download packages
+if(!requireNamespace("devtools", quietly = T)){
+  install.packages("devtools")
+}
+devtools:: install_github("PavlidisLab/gemma.R", force = T)
+install.packages("plyr")
+install.packages("tidyverse")
+```
+
+
+```{r load_pack}
+# Load packages
+library("gemma.R")
+library("plyr")
+library("tidyverse")
+
+# Check loaded packages 
+(.packages())
+```
+
+
+### 2) Gemma Dataset Search
+
+- Datasets in Gemma are annotated using structured terms of ontologies. Many of
+the ontological terms are hierarchical.
+
+- **`Ontologies`**: a set of concepts and categories in a subject area or domain 
+that shows their properties and the relations between them.
+
+- Within an ontological hierarchy, the broader, umbrella term is called the 
+*"parent"* while the term representing the more specific subset is called the 
+*"child"*. When requesting Gemma records with particular annotation, a parent 
+term can often pull up all records with the child terms.
+
+
+```{r onto_anno, cache = TRUE}
+# Search for ontological annotations of "glioblastoma"
+gbm_annotation <- search_annotations("glioblastom*")
+
+# Count usage of ontological terms and filter terms that are used in Gemma
+gbm_annotation_in_Gemma <- gbm_annotation %>%
+  # Add new column "counts" in which the function is being applied to every
+  # single value.URI from gbm_annotation
+  mutate(counts = sapply(value.URI, function(uri) {
+    # This function retrieves "totalElements" attribute from the datasets 
+    # associated with given input URI
+    # The "totalElements" represent the total number of records
+    attributes(get_datasets(uris = uri))$totalElements
+  })) %>%
+  # Filter to keep URI with at least 1 records
+  filter(counts > 0)
+
+# Check child terms for "glioblastoma"
+get_child_terms("http://purl.obolibrary.org/obo/MONDO_0018177")
+```
+
+
+```{r search_data, cache = TRUE}
+# Search dataset using search terms
+gbm_datasets_searchterm <- get_datasets(query = "glioblastom* OR 
+                                                gbm OR gb OR 
+                                                \"glioblastoma multiforme\"
+                                                \"grade IV astrocytic tumor\" OR 
+                                                \"grade IV astrocytoma\" OR 
+                                                \"WHO grade IV glioma)\"",
+                                        # Focus on human datasets
+                                        taxa = c("human")) %>%
+  # Get full set of results
+  get_all_pages()
+
+# Search dataset using parent term on ontological hierarchy
+gbm_datasets_uris <- get_datasets(uris = "http://purl.obolibrary.org/obo/MONDO_0018177",
+                                  # Focus on human datasets
+                                  taxa = c("human")) %>%
+  # Get full set of results
+  get_all_pages()
+
+# Check if the datasets are duplicated in both methods of searching
+gbm_datasets_check <- gbm_datasets_searchterm %>%
+  mutate(available_in_both_dataframes = ifelse(experiment.shortName %in% 
+                                               gbm_datasets_uris$experiment.shortName, 
+                                               TRUE, FALSE))
+
+
+# Check the number of datasets
+length(gbm_datasets_check$taxon.name)
+
+# Check the quality of the datasets
+# (FALSE - data are of good quality)
+table(gbm_datasets_check$experiment.troubled)
+
+# Check if raw data were available 
+# (1 - raw data available | -1 - raw data not available)
+table(gbm_datasets_check$experiment.rawData)
+
+# Filter for datasets with good quality and raw data available
+gbm_datasets_filtered <- gbm_datasets_check %>%
+  filter(experiment.troubled == FALSE & gbm_datasets_check$experiment.rawData == 1)
+```
+
+
+
+
+
+
+
