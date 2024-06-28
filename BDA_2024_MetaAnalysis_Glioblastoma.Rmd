@@ -68,13 +68,13 @@ term can often pull up all records with the child terms.
 
 ```{r onto_anno, cache = TRUE}
 # Search for ontological annotations of "glioblastoma"
-gbm_annotation <- search_annotations("glioblastom*")
+gbm_onto_annotation <- search_annotations("glioblastom*")
 
 # Count usage of ontological terms and filter terms that are used in Gemma
-gbm_annotation_in_Gemma <- gbm_annotation %>%
+gbm_onto_annotation_in_Gemma <- gbm_onto_annotation %>%
   # Add new column "counts" in which the function is being applied to every
   # single value.URI from gbm_annotation
-  mutate(counts = sapply(value.URI, function(uri) {
+  mutate(counts = sapply(value.URI, function(uri){
     # This function retrieves "totalElements" attribute from the datasets 
     # associated with given input URI
     # The "totalElements" represent the total number of records
@@ -132,8 +132,105 @@ gbm_datasets_filtered <- gbm_datasets_check %>%
 ```
 
 
+```{r extract_anno, cache = TRUE}
+# Create a function to extract annotations
+extract_annotations <- function(dataset_shortname, annotation_class_name){
+  # Extract annotations for the dataset identified by dataset_shortname
+  exp_anno <- get_dataset_annotations(dataset = dataset_shortname)
+  
+  # Check if there are any annotations of the specified annotation_class_name
+  if(any(exp_anno$class.name == annotation_class_name)){
+    # If yes, return the term names associated with the specified annotation_class_name
+    return(exp_anno$term.name[exp_anno$class.name == annotation_class_name])
+  } else {
+    # If no, return NA
+    return(NA)
+  }
+}
 
+# Extract annotations for each class
 
+# Organism part
+gbm_annotations_organism_part <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                        extract_annotations,
+                                        annotation_class_name = "organism part") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Organism_part")
 
+# Cell type
+gbm_annotations_cell_type <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                    extract_annotations,
+                                    annotation_class_name = "cell type") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Cell_type")
+
+# Developmental stage
+gbm_annotations_dev_stage <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                    extract_annotations,
+                                    annotation_class_name = "developmental stage") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Developmental_stage")
+
+# Treatment
+gbm_annotations_treatment <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                    extract_annotations,
+                                    annotation_class_name = "treatment") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Treatment")
+
+# Disease
+gbm_annotations_disease <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                  extract_annotations,
+                                  annotation_class_name = "disease") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Disease")
+
+# Disease model
+gbm_annotations_dis_model <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                    extract_annotations,
+                                    annotation_class_name = "Disease model") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Disease_model")
+
+# Genotype
+gbm_annotations_geno <- sapply(gbm_datasets_filtered$experiment.shortName,
+                               extract_annotations,
+                               annotation_class_name = "genotype") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Genotype")
+
+# Strain
+gbm_annotations_strain <- sapply(gbm_datasets_filtered$experiment.shortName,
+                                 extract_annotations,
+                                 annotation_class_name = "strain") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Strain")
+
+# Biological sex
+gbm_annotations_sex <- sapply(gbm_datasets_filtered$experiment.shortName,
+                              extract_annotations,
+                              annotation_class_name = "biological sex") %>%
+  # Transform into a dataframe
+  enframe(name = "ID", value = "Biological_sex")
+
+# Combine all annotations by ID and create extra columns in the final dataframe
+gbm_annotations_all <- gbm_annotations_organism_part %>%
+  left_join(gbm_annotations_cell_type, by = "ID") %>%
+  left_join(gbm_annotations_dev_stage, by = "ID") %>%
+  left_join(gbm_annotations_treatment, by = "ID") %>%
+  left_join(gbm_annotations_disease, by = "ID") %>%
+  left_join(gbm_annotations_dis_model, by = "ID") %>%
+  left_join(gbm_annotations_geno, by = "ID") %>%
+  left_join(gbm_annotations_strain, by = "ID") %>%
+  left_join(gbm_annotations_sex, by = "ID") %>%
+  mutate(Manipulation_unrelated_to_topic = vector(mode = "character", length = nrow(.)), 
+         Incorrect_developmental_stage = vector(mode = "character", length = nrow(.)), 
+         Not_bulk_dissection_Particular_Cell_type_or_Subregion = vector(mode = "character", length = nrow(.)),
+         Not_full_transcriptome = vector(mode = "character", length = nrow(.)),
+         Metadata_issues_Missing_info_NoPub_Retracted_Duplicated = vector(mode = "character", length = nrow(.)),
+         Excluded = vector(mode = "character", length = nrow(.)), 
+         Excluded_reason = vector(mode = "character", length = nrow(.)),
+         Included = vector(mode = "character", length = nrow(.)))
+```
 
 
