@@ -13,6 +13,66 @@ knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE)
 ```
 
+
+## Research Flow of Meta-Analysis of Transcriptomics Profile in Glioblastoma
+
+*Step 1:* Project set up with necessary packages
+
+*Step 2:* Search for dataset in Gemma using search terms 
+
+*Step 3*: Extract annotations for every class in the datasets, including:
+
+1. Organism part 
+
+2. Cell type
+
+3. Developmental stage 
+
+4. Treatment
+
+5. Disease
+
+6. Disease model
+
+7. Genotype
+
+8. Strain
+
+9. Biological sex
+
+(These annotations would be helpful in dataset selection based on inclusion/exclusion
+criteria regarding these classes)
+
+*Step 4:* Extract annotations for experimental design in the datasets, including:
+
+1. Factor categories 
+
+2. Experimental factors 
+
+3. Baseline factors 
+
+(These annotations would be helpful in dataset selection as they show which variables
+were actually manipulated as part of the experiment, especially for datasets in large
+studies containing multiple experiments)
+
+*Step 5:* Extract statistical contrasts of differential analysis in the datasets
+
+(These statistical contrasts allow us to check if the differential analyses are:
+
+- Subsetted by brain region 
+
+- Included unwanted subjects
+
+- Set up in an appropriate manner with the reference group
+
+Based on the statistical contrasts, we might need to re-run the differential analysis)
+
+*Step 6:* Assess gene expression range 
+
+(Some datasets, especially Agilent microaaray datasets, were normalized incorrectly,
+which may require re-normalization)
+
+
 ### 1) Project Set Up
 
 ```{r setdw, eval = FALSE, echo = FALSE}
@@ -35,7 +95,7 @@ renv::snapshot()
 if(!requireNamespace("devtools", quietly = T)){
   install.packages("devtools")
 }
-devtools:: install_github("PavlidisLab/gemma.R", force = T)
+devtools:: install_github("PavlisLab/gemma.R", force = T)
 install.packages("plyr")
 install.packages("tidyverse")
 ```
@@ -91,11 +151,26 @@ get_child_terms("http://purl.obolibrary.org/obo/MONDO_0018177")
 ```{r search_data, cache = TRUE}
 # Search dataset using search terms
 gbm_datasets_searchterm <- get_datasets(query = "glioblastom* OR 
-                                                gbm OR gb OR 
+                                                gbm OR gb OR gsc OR 
                                                 \"glioblastoma multiforme\"
                                                 \"grade IV astrocytic tumor\" OR 
                                                 \"grade IV astrocytoma\" OR 
-                                                \"WHO grade IV glioma)\"",
+                                                \"WHO grade IV glioma)\" OR 
+                                                \"glioblastoma stem cells\" OR
+                                                \"self-renewing glioblastoma stem cells\"",
+                                        # Focus on human datasets
+                                        taxa = c("human")) %>%
+  # Get full set of results
+  get_all_pages()
+
+# Check if abbreviations of "gbm" and "gb affect the search
+gbm_datasets_searchterm_noabbre <- get_datasets(query = "glioblastom* OR 
+                                                \"glioblastoma multiforme\"
+                                                \"grade IV astrocytic tumor\" OR 
+                                                \"grade IV astrocytoma\" OR 
+                                                \"WHO grade IV glioma)\" OR
+                                                \"glioblastoma stem cells\" OR
+                                                \"self-renewing glioblastoma stem cells\"",
                                         # Focus on human datasets
                                         taxa = c("human")) %>%
   # Get full set of results
@@ -108,15 +183,20 @@ gbm_datasets_uris <- get_datasets(uris = "http://purl.obolibrary.org/obo/MONDO_0
   # Get full set of results
   get_all_pages()
 
+ 
+# Check the number of datasets in all dataframes
+nrow(gbm_datasets_searchterm)
+nrow(gbm_datasets_searchterm_noabbre)
+nrow(gbm_datasets_uris)
+
 # Check if the datasets are duplicated in both methods of searching
 gbm_datasets_check <- gbm_datasets_searchterm %>%
   mutate(available_in_both_dataframes = ifelse(experiment.shortName %in% 
                                                gbm_datasets_uris$experiment.shortName, 
                                                TRUE, FALSE))
 
-
 # Check the number of datasets
-length(gbm_datasets_check$taxon.name)
+nrow(gbm_datasets_check)
 
 # Check the quality of the datasets
 # (FALSE - data are of good quality)
@@ -129,13 +209,18 @@ table(gbm_datasets_check$experiment.rawData)
 # Filter for datasets with good quality and raw data available
 gbm_datasets_filtered <- gbm_datasets_check %>%
   filter(experiment.troubled == FALSE & gbm_datasets_check$experiment.rawData == 1)
+
+# Check the filtered datasets
+str(gbm_datasets_filtered)
 ```
 
+
+#### 3) Extraction of Annotations for Each Class in Each Dataset
 
 ```{r extract_anno, cache = TRUE}
 # Create a function to extract annotations
 extract_annotations <- function(dataset_shortname, annotation_class_name){
-  # Extract annotations for the dataset identified by dataset_shortname
+  # Extract annotations for the dataset experiment.shortNameentified by dataset_shortname
   exp_anno <- get_dataset_annotations(dataset = dataset_shortname)
   
   # Check if there are any annotations of the specified annotation_class_name
@@ -155,82 +240,342 @@ gbm_annotations_organism_part <- sapply(gbm_datasets_filtered$experiment.shortNa
                                         extract_annotations,
                                         annotation_class_name = "organism part") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Organism_part")
+  enframe(name = "experiment.shortName", value = "Organism_part")
 
 # Cell type
 gbm_annotations_cell_type <- sapply(gbm_datasets_filtered$experiment.shortName,
                                     extract_annotations,
                                     annotation_class_name = "cell type") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Cell_type")
+  enframe(name = "experiment.shortName", value = "Cell_type")
 
 # Developmental stage
 gbm_annotations_dev_stage <- sapply(gbm_datasets_filtered$experiment.shortName,
                                     extract_annotations,
                                     annotation_class_name = "developmental stage") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Developmental_stage")
+  enframe(name = "experiment.shortName", value = "Developmental_stage")
 
 # Treatment
 gbm_annotations_treatment <- sapply(gbm_datasets_filtered$experiment.shortName,
                                     extract_annotations,
                                     annotation_class_name = "treatment") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Treatment")
+  enframe(name = "experiment.shortName", value = "Treatment")
 
 # Disease
 gbm_annotations_disease <- sapply(gbm_datasets_filtered$experiment.shortName,
                                   extract_annotations,
                                   annotation_class_name = "disease") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Disease")
+  enframe(name = "experiment.shortName", value = "Disease")
 
 # Disease model
 gbm_annotations_dis_model <- sapply(gbm_datasets_filtered$experiment.shortName,
                                     extract_annotations,
                                     annotation_class_name = "Disease model") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Disease_model")
+  enframe(name = "experiment.shortName", value = "Disease_model")
 
 # Genotype
 gbm_annotations_geno <- sapply(gbm_datasets_filtered$experiment.shortName,
                                extract_annotations,
                                annotation_class_name = "genotype") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Genotype")
+  enframe(name = "experiment.shortName", value = "Genotype")
 
 # Strain
 gbm_annotations_strain <- sapply(gbm_datasets_filtered$experiment.shortName,
                                  extract_annotations,
                                  annotation_class_name = "strain") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Strain")
+  enframe(name = "experiment.shortName", value = "Strain")
 
 # Biological sex
 gbm_annotations_sex <- sapply(gbm_datasets_filtered$experiment.shortName,
                               extract_annotations,
                               annotation_class_name = "biological sex") %>%
   # Transform into a dataframe
-  enframe(name = "ID", value = "Biological_sex")
-
-# Combine all annotations by ID and create extra columns in the final dataframe
-gbm_annotations_all <- gbm_annotations_organism_part %>%
-  left_join(gbm_annotations_cell_type, by = "ID") %>%
-  left_join(gbm_annotations_dev_stage, by = "ID") %>%
-  left_join(gbm_annotations_treatment, by = "ID") %>%
-  left_join(gbm_annotations_disease, by = "ID") %>%
-  left_join(gbm_annotations_dis_model, by = "ID") %>%
-  left_join(gbm_annotations_geno, by = "ID") %>%
-  left_join(gbm_annotations_strain, by = "ID") %>%
-  left_join(gbm_annotations_sex, by = "ID") %>%
-  mutate(Manipulation_unrelated_to_topic = vector(mode = "character", length = nrow(.)), 
-         Incorrect_developmental_stage = vector(mode = "character", length = nrow(.)), 
-         Not_bulk_dissection_Particular_Cell_type_or_Subregion = vector(mode = "character", length = nrow(.)),
-         Not_full_transcriptome = vector(mode = "character", length = nrow(.)),
-         Metadata_issues_Missing_info_NoPub_Retracted_Duplicated = vector(mode = "character", length = nrow(.)),
-         Excluded = vector(mode = "character", length = nrow(.)), 
-         Excluded_reason = vector(mode = "character", length = nrow(.)),
-         Included = vector(mode = "character", length = nrow(.)))
+  enframe(name = "experiment.shortName", value = "Biological_sex")
 ```
 
+
+#### 4) Extraction of Factors in Experimental Design of Each Dataset
+
+Sometimes it is difficult to determine from the abstract and dataset annotation 
+which variables were *actually manipulated* as part of the experiment. 
+
+This can be especially true for datasets that were part of much larger studies 
+containing multiple experiments.
+
+Gemma's information about the experimental design for the transcriptional profiling 
+experiment can clarify this. 
+
+```{r extract_factor, cache = TRUE}
+# Create a function to extract factors in experimental design 
+extract_factors <- function(dataset_shortname){
+  # Create a dataframe to store the results
+  factor_df <- data.frame(
+    experiment.shortName = dataset_shortname,
+    factor_info = vector(mode = "character", 
+                         length = length(dataset_shortname)),
+    treatment_factor_info = vector(mode = "character", 
+                                   length = length(dataset_shortname)),
+    baseline_factor_info = vector(mode = "character", 
+                                   length = length(dataset_shortname)),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each of the dataset 
+  for (i in c(1:length(dataset_shortname))){
+    
+    # Extract the differential expression analysis from the datasets 
+    design <- get_dataset_differential_expression_analyses(dataset_shortname[i])
+    
+    if(nrow(design) > 0){
+    # Concatenate the factor categories into a single string
+    factor_df$factor_info[i] <- paste(design$factor.category, collapse = ";")
+    
+    # Concatenate the experimental factors into a single string
+    treatment_factor <- sapply(design$experimental.factors, function(f) f$summary)
+    factor_df$treatment_factor_info[i] <- paste(treatment_factor, collapse = ";")
+    
+    # Concatenate the baseline factors into a single string 
+    baseline_factor <- sapply(design$baseline.factors, function(f) f$summary)
+    factor_df$baseline_factor_info[i] <- paste(baseline_factor, collapse = ";")
+    }
+  }
+  # Return the final dataframe 
+  return(factor_df)
+}  
+
+# Example use 
+gbm_annotations_factor <- extract_factors(gbm_datasets_filtered$experiment.shortName)
+```
+
+
+```{r data_combine, cache = TRUE}
+# Combine all annotations by experiment.shortName and create extra columns in the final dataframe
+gbm_annotations_all <- gbm_datasets_filtered %>%
+  left_join(gbm_annotations_organism_part, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_cell_type, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_dev_stage, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_treatment, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_disease, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_dis_model, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_geno, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_strain, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_sex, by = "experiment.shortName") %>%
+  left_join(gbm_annotations_factor, by = "experiment.shortName") %>%
+  
+  # Add empty columns to store screening notes 
+  mutate(Manipulation_unrelated_to_topic = 
+           vector(mode = "character", length = nrow(.)), 
+         Incorrect_developmental_stage = 
+           vector(mode = "character", length = nrow(.)), 
+         Not_bulk_dissection_Particular_Cell_type_or_Subregion = 
+           vector(mode = "character", length = nrow(.)),
+         Not_full_transcriptome = 
+           vector(mode = "character", length = nrow(.)),
+         Metadata_issues_Missing_info_NoPub_Retracted_Duplicated = 
+           vector(mode = "character", length = nrow(.)),
+         Excluded = 
+           vector(mode = "character", length = nrow(.)), 
+         Excluded_reason = 
+           vector(mode = "character", length = nrow(.)),
+         Included = 
+           vector(mode = "character", length = nrow(.)))
+
+# Transform the annotations into characters
+gbm_annotations_all$Organism_part <- as.character(gbm_annotations_all$Organism_part)
+gbm_annotations_all$Cell_type <- as.character(gbm_annotations_all$Cell_type)
+gbm_annotations_all$Developmental_stage <- as.character(gbm_annotations_all$Developmental_stage)
+gbm_annotations_all$Treatment <- as.character(gbm_annotations_all$Treatment)
+gbm_annotations_all$Disease <- as.character(gbm_annotations_all$Disease)
+gbm_annotations_all$Disease_model <- as.character(gbm_annotations_all$Disease_model)
+gbm_annotations_all$Genotype <- as.character(gbm_annotations_all$Genotype)
+gbm_annotations_all$Strain <- as.character(gbm_annotations_all$Strain)
+gbm_annotations_all$Biological_sex <- as.character(gbm_annotations_all$Biological_sex)
+
+# Extract the final dataframe into CSV
+# write_csv(gbm_annotations_all, "All_datasets_with_annotations.csv")
+# str(gbm_annotations_all)
+```
+
+
+### 5) Extraction of Statistical Contrasts of Differential Analysis in Each Dataset
+
+For the meta-analysis, we will be extracting the differential expression results 
+from Gemma. The differential expression results for each dataset may include multiple 
+statistical contrasts (e.g., drug1 vs. vehicle, drug2 vs. vehicle). Each of these 
+contrasts are labeled with a result ID and contrast ID within the Gemma database. 
+
+We will need to know which of these IDs are relevant to our project goals to 
+easily extract their results.
+
+We will also need to double-check that these statistical contrasts are set up in 
+a manner that makes sense for our experiments:
+
+First, for experiments that include more than one brain region, we will need to 
+double-check that the results have been subsetted by brain region (instead of 
+including brain region ("OrganismPart") as a factor in the model). If they have not 
+been subsetted by region, we will probably need to re-run the differential expression 
+analysis.
+
+Depending on the goals of the meta-analysis, we may also need to re-run the differential 
+expression analysis to remove other unwanted subjects (e.g., removing subjects with 
+genotypes that might interfere with our results)
+
+Second, we will need to double-check that the comparisons include an appropriate 
+reference group - sometimes they are reversed in Gemma (e.g., having the drug treatment 
+set as the baseline, with vehicle as the manipulation). If this is the case, we 
+will need to invert the effects when we input them into our meta-analysis 
+(multiply the effects by -1).
+
+```{r extract_contrast, cache = TRUE}
+# Create a function to extract statistical contrasts of differential analysis 
+# in each dataset 
+extract_contrasts <- function(dataset_shortname){
+  
+  # Create a dataframe to store the results 
+  resultsets_toscreen <- data.frame(
+    experiment.shortName = dataset_shortname,
+    ResultSetIDs = "NA",
+    ContrastIDs = "NA",
+    ExperimentIDs = "NA",
+    FactorCategory = "NA",
+    ExperimentalFactors = "NA",
+    BaselineFactors = "NA",
+    Subsetted = FALSE,
+    SubsetBy = "NA",
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each of the datasets 
+  for (i in c(1:length(dataset_shortname))){
+    
+    # Extract the differential expression analysis from the datasets 
+    design <- get_dataset_differential_expression_analyses(dataset_shortname[i])
+    
+    # Check if the design dataframe has rows
+    if (nrow(design) > 0){
+    
+      # Create the vectors to store the experimental and baseline factors
+      experimental_factors <- vector(mode = "character", length = nrow(design))
+      baseline_factors <- vector(mode = "character", length = nrow(design))
+      
+      # Loop through each result.ID in the design dataframe
+      for (j in c(1:length(design$result.ID))){
+        
+        # Concatenate the experimental factors into a single string
+        experimental_factors[j] <- paste(design$experimental.factors[[j]]$summary, 
+                                         collapse = ";")
+        
+        # Concatenate the baseline factors into a single string 
+        baseline_factors[j] <- paste(design$baseline.factors[[j]]$summary, 
+                                     collapse = ";")
+      }
+      
+      # Create a vector to store subset information
+      SubsetBy <- vector(mode = "character", length = nrow(design))
+      
+      # Check if the design dataframe is subsetted or not
+      if(design$isSubset[1] == TRUE) {
+        
+        # Loop through each result.ID to extract and concatenate subset information
+        for (j in c(1:length(design$result.ID))){
+          SubsetBy[j] <- paste(design$subsetFactor[[j]]$summary, 
+                               collapse = ";")
+        } 
+      }  else {
+          # If not subsetted, fill the SubsetBy vector with NA values 
+          SubsetBy <- rep(NA, length(design$result.ID))
+        }
+        
+        # Append the extracted information to the initial dataframe
+        resultsets_toscreen <- rbind(resultsets_toscreen, data.frame(
+          experiment.shortName = dataset_shortname,
+          ResultSetIDs = design$result.ID,
+          ContrastIDs = design$contrast.ID,
+          ExperimentIDs = design$experiment.ID,
+          FactorCategory = design$factor.category,
+          ExperimentalFactors = experimental_factors,
+          BaselineFactors = baseline_factors,
+          Subsetted = design$isSubset,
+          SubsetBy = SubsetBy,
+          stringsAsFactors = FALSE
+        ))
+      }
+    }
+    
+    # Add empty columns to store screening notes 
+    resultsets_toscreen <- cbind(
+      resultsets_toscreen,
+      Include = vector(mode="character", length = nrow(resultsets_toscreen)),
+      WrongBaseline = vector(mode="character", length = nrow(resultsets_toscreen)),
+      ResultsNotRegionSpecific = vector(mode="character", length = nrow(resultsets_toscreen)),
+      ReAnalyze = vector(mode="character", length = nrow(resultsets_toscreen)),
+      stringAsFactors = FALSE
+    )
+    
+    # Remove the initial placeholder row 
+    resultsets_toscreen <- resultsets_toscreen[-1,]
+    
+    # Return the final dataframe 
+    return(resultsets_toscreen)
+  }
+
+# Example use
+# extract_contrasts("GSE84183")
+```
+
+
+### 6) Gene Expression Range Assessment
+
+```{r assess_gene_express, cache = TRUE}
+# Create a function to check the expression range of the dataset 
+# (especially for the Agilent microarray datasets)
+check_expression <- function(dataset_shortname){
+  
+  # Retrieve the processed expression data for the given dataset
+  expression_data <- get_dataset_processed_expression(dataset_shortname)
+  
+  # Print the structure of the expression data
+  print(str(expression_data))
+  
+  # The first four columns are row metadata: Probe, GeneSymbol, GeneName, NCBI ID
+  # The rest of the columns are gene expression values for each subject
+  
+  # Exclude metadata row (row 1-4) and convert the gene expression columns to a 
+  # matrix for further analysis 
+  expression_matrix <- as.matrix(expression_data[,-1:-4])
+  
+  # Create a histogram of the expression data 
+  hist(expression_matrix, 
+       main = paste("Histogram of Expression Data for", dataset_shortname),
+       # The y-axis is the gene frequency
+       # The x-axis is log 2 gene expression - log 2 counts per million
+       xlab = "Log 2 Expression", ylab = "Frequency")
+  
+       # The large spike on the left side of the histogram ("floor effect") are 
+       # all of the genes that are not truly expressed or have too low of expression 
+       # to be measurable 
+  
+  # Log 2 RNA-seq dataset has the range between -5 to 12
+  # Log 2 Microarray dataset has the range between 4 to 15
+  
+  # Calculate the min, median, max values of the expression data
+  min_val <- min(expression_matrix)
+  median_val <- median(expression_matrix)
+  max_val <- max(expression_matrix)
+  
+  # Print the calculated values
+  print(paste("Minimum value:", min_val))
+  print(paste("Median value:", median_val))
+  print(paste("Maximum value:", max_val))
+}
+
+# Example use 
+# check_expression("GSE81672")
+```
 
