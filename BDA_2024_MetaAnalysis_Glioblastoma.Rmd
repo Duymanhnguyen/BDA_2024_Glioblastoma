@@ -69,7 +69,7 @@ Based on the statistical contrasts, we might need to re-run the differential ana
 
 *Step 6:* Assess gene expression range 
 
-(Some datasets, especially Agilent microaaray datasets, were normalized incorrectly,
+(Some datasets, especially Agilent microarray datasets, were normalized incorrectly,
 which may require re-normalization)
 
 
@@ -95,9 +95,30 @@ renv::snapshot()
 if(!requireNamespace("devtools", quietly = T)){
   install.packages("devtools")
 }
-devtools:: install_github("PavlisLab/gemma.R", force = T)
+devtools:: install_github("PavlidisLab/gemma.R", force = T)
+
+if (!require("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("multtest")                                 
+BiocManager::install("clusterProfiler")
+# Mus musculus (Mouse gene annotation database)
+# Other databases include:
+# 1. Rattus norvegicus (Rat) - org.Rn.eg.db
+# 2. Homo sapiens (Human) - org.Hs.eg.db
+BiocManager::install("org.Mm.eg.db")  
+BiocManager::install("ReactomePA")  
+BiocManager::install("fgsea")
+BiocManager::install("pathview")
+
 install.packages("plyr")
+install.packages("dplyr")
+install.packages("metafor")
 install.packages("tidyverse")
+install.packages("writexl")
+install.packages("pheatmap")
+install.packages("RColorBrewer")
+install.packages("viridis")
+install.packages("rentrez")
 ```
 
 
@@ -105,7 +126,19 @@ install.packages("tidyverse")
 # Load packages
 library("gemma.R")
 library("plyr")
+library("metafor")
 library("tidyverse")
+library("writexl")
+library("pheatmap")
+library("RColorBrewer")
+library("viridis")
+library("multtest")
+library("rentrez")
+library("clusterProfiler")
+library("org.Mm.eg.db")
+library("ReactomePA")
+library("fgsea")
+library("pathview")
 
 # Check loaded packages 
 (.packages())
@@ -128,10 +161,10 @@ term can often pull up all records with the child terms.
 
 ```{r onto_anno, cache = TRUE}
 # Search for ontological annotations of "glioblastoma"
-gbm_onto_annotation <- search_annotations("glioblastom*")
+Gbm_onto_annotation <- search_annotations("glioblastom*")
 
 # Count usage of ontological terms and filter terms that are used in Gemma
-gbm_onto_annotation_in_Gemma <- gbm_onto_annotation %>%
+Gbm_onto_annotation_in_Gemma <- Gbm_onto_annotation %>%
   # Add new column "counts" in which the function is being applied to every
   # single value.URI from gbm_annotation
   mutate(counts = sapply(value.URI, function(uri){
@@ -150,34 +183,36 @@ get_child_terms("http://purl.obolibrary.org/obo/MONDO_0018177")
 
 ```{r search_data, cache = TRUE}
 # Search dataset using search terms
-gbm_datasets_searchterm <- get_datasets(query = "glioblastom* OR 
-                                                gbm OR gb OR gsc OR 
+Gbm_datasets_searchterm <- get_datasets(query = "glioblastom* OR 
+                                                gbm OR gb OR gsc OR btic OR
                                                 \"glioblastoma multiforme\"
                                                 \"grade IV astrocytic tumor\" OR 
                                                 \"grade IV astrocytoma\" OR 
-                                                \"WHO grade IV glioma)\" OR 
+                                                \"WHO grade IV glioma\" OR 
                                                 \"glioblastoma stem cells\" OR
-                                                \"self-renewing glioblastoma stem cells\"",
+                                                \"self-renewing glioblastoma stem cells\" OR
+                                                \"brain tumor initiating cells\" " ,
                                         # Focus on human datasets
                                         taxa = c("human")) %>%
   # Get full set of results
   get_all_pages()
 
 # Check if abbreviations of "gbm" and "gb affect the search
-gbm_datasets_searchterm_noabbre <- get_datasets(query = "glioblastom* OR 
+Gbm_datasets_searchterm_noabbre <- get_datasets(query = "glioblastom* OR 
                                                 \"glioblastoma multiforme\"
                                                 \"grade IV astrocytic tumor\" OR 
                                                 \"grade IV astrocytoma\" OR 
-                                                \"WHO grade IV glioma)\" OR
+                                                \"WHO grade IV glioma\" OR
                                                 \"glioblastoma stem cells\" OR
-                                                \"self-renewing glioblastoma stem cells\"",
+                                                \"self-renewing glioblastoma stem cells\" OR
+                                                \"brain tumor initiating cells\" ",
                                         # Focus on human datasets
                                         taxa = c("human")) %>%
   # Get full set of results
   get_all_pages()
 
 # Search dataset using parent term on ontological hierarchy
-gbm_datasets_uris <- get_datasets(uris = "http://purl.obolibrary.org/obo/MONDO_0018177",
+Gbm_datasets_uris <- get_datasets(uris = "http://purl.obolibrary.org/obo/MONDO_0018177",
                                   # Focus on human datasets
                                   taxa = c("human")) %>%
   # Get full set of results
@@ -185,41 +220,41 @@ gbm_datasets_uris <- get_datasets(uris = "http://purl.obolibrary.org/obo/MONDO_0
 
  
 # Check the number of datasets in all dataframes
-nrow(gbm_datasets_searchterm)
-nrow(gbm_datasets_searchterm_noabbre)
-nrow(gbm_datasets_uris)
+nrow(Gbm_datasets_searchterm)
+nrow(Gbm_datasets_searchterm_noabbre)
+nrow(Gbm_datasets_uris)
 
 # Check if the datasets are duplicated in both methods of searching
-gbm_datasets_check <- gbm_datasets_searchterm %>%
+Gbm_datasets_check <- Gbm_datasets_searchterm %>%
   mutate(available_in_both_dataframes = ifelse(experiment.shortName %in% 
-                                               gbm_datasets_uris$experiment.shortName, 
+                                               Gbm_datasets_uris$experiment.shortName, 
                                                TRUE, FALSE))
 
 # Check the number of datasets
-nrow(gbm_datasets_check)
+nrow(Gbm_datasets_check)
 
 # Check the quality of the datasets
 # (FALSE - data are of good quality)
-table(gbm_datasets_check$experiment.troubled)
+table(Gbm_datasets_check$experiment.troubled)
 
 # Check if raw data were available 
 # (1 - raw data available | -1 - raw data not available)
-table(gbm_datasets_check$experiment.rawData)
+table(Gbm_datasets_check$experiment.rawData)
 
 # Filter for datasets with good quality and raw data available
-gbm_datasets_filtered <- gbm_datasets_check %>%
-  filter(experiment.troubled == FALSE & gbm_datasets_check$experiment.rawData == 1)
+Gbm_datasets_filtered <- Gbm_datasets_check %>%
+  filter(experiment.troubled == FALSE & experiment.rawData == 1)
 
 # Check the filtered datasets
-str(gbm_datasets_filtered)
+str(Gbm_datasets_filtered)
 ```
 
 
 #### 3) Extraction of Annotations for Each Class in Each Dataset
 
-```{r extract_anno, cache = TRUE}
+```{r func_extract_anno}
 # Create a function to extract annotations
-extract_annotations <- function(dataset_shortname, annotation_class_name){
+ExtractAnnotations <- function(dataset_shortname, annotation_class_name){
   # Extract annotations for the dataset experiment.shortNameentified by dataset_shortname
   exp_anno <- get_dataset_annotations(dataset = dataset_shortname)
   
@@ -232,68 +267,71 @@ extract_annotations <- function(dataset_shortname, annotation_class_name){
     return(NA)
   }
 }
+```
 
-# Extract annotations for each class
 
-# Organism part
-gbm_annotations_organism_part <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                        extract_annotations,
+```{r run_extract_anno, cache = TRUE}
+# Function use 
+
+# Extract annotation for organism part
+Gbm_annotations_organism_part <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                        ExtractAnnotations,
                                         annotation_class_name = "organism part") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Organism_part")
 
-# Cell type
-gbm_annotations_cell_type <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                    extract_annotations,
+# Extract annotation for cell type
+Gbm_annotations_cell_type <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                    ExtractAnnotations,
                                     annotation_class_name = "cell type") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Cell_type")
 
-# Developmental stage
-gbm_annotations_dev_stage <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                    extract_annotations,
+# Extract annotation for developmental stage
+Gbm_annotations_dev_stage <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                    ExtractAnnotations,
                                     annotation_class_name = "developmental stage") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Developmental_stage")
 
-# Treatment
-gbm_annotations_treatment <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                    extract_annotations,
+# Extract annotation for treatment
+Gbm_annotations_treatment <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                    ExtractAnnotations,
                                     annotation_class_name = "treatment") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Treatment")
 
-# Disease
-gbm_annotations_disease <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                  extract_annotations,
+# Extract annotation for disease
+Gbm_annotations_disease <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                  ExtractAnnotations,
                                   annotation_class_name = "disease") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Disease")
 
-# Disease model
-gbm_annotations_dis_model <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                    extract_annotations,
+# Extract annotation for disease model
+Gbm_annotations_dis_model <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                    ExtractAnnotations,
                                     annotation_class_name = "Disease model") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Disease_model")
 
-# Genotype
-gbm_annotations_geno <- sapply(gbm_datasets_filtered$experiment.shortName,
-                               extract_annotations,
+# Extract annotation for genotype
+Gbm_annotations_geno <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                               ExtractAnnotations,
                                annotation_class_name = "genotype") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Genotype")
 
-# Strain
-gbm_annotations_strain <- sapply(gbm_datasets_filtered$experiment.shortName,
-                                 extract_annotations,
+# Extract annotation for strain
+Gbm_annotations_strain <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                                 ExtractAnnotations,
                                  annotation_class_name = "strain") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Strain")
 
-# Biological sex
-gbm_annotations_sex <- sapply(gbm_datasets_filtered$experiment.shortName,
-                              extract_annotations,
+# Extract annotation for biological sex
+Gbm_annotations_sex <- sapply(Gbm_datasets_filtered$experiment.shortName,
+                              ExtractAnnotations,
                               annotation_class_name = "biological sex") %>%
   # Transform into a dataframe
   enframe(name = "experiment.shortName", value = "Biological_sex")
@@ -311,9 +349,9 @@ containing multiple experiments.
 Gemma's information about the experimental design for the transcriptional profiling 
 experiment can clarify this. 
 
-```{r extract_factor, cache = TRUE}
+```{r func_extract_factor, cache = TRUE}
 # Create a function to extract factors in experimental design 
-extract_factors <- function(dataset_shortname){
+ExtractFactors <- function(dataset_shortname){
   # Create a dataframe to store the results
   factor_df <- data.frame(
     experiment.shortName = dataset_shortname,
@@ -348,26 +386,30 @@ extract_factors <- function(dataset_shortname){
   # Return the final dataframe 
   return(factor_df)
 }  
+```
 
-# Example use 
-gbm_annotations_factor <- extract_factors(gbm_datasets_filtered$experiment.shortName)
+
+```{r run_extract_factor, cache = TRUE}
+# Function use 
+Gbm_annotations_factor <- ExtractFactors(Gbm_datasets_filtered$experiment.shortName)
 ```
 
 
 ```{r data_combine, cache = TRUE}
-# Combine all annotations by experiment.shortName and create extra columns in the final dataframe
-gbm_annotations_all <- gbm_datasets_filtered %>%
-  left_join(gbm_annotations_organism_part, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_cell_type, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_dev_stage, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_treatment, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_disease, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_dis_model, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_geno, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_strain, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_sex, by = "experiment.shortName") %>%
-  left_join(gbm_annotations_factor, by = "experiment.shortName") %>%
-  
+# Combine all annotations by experiment.shortName and create extra columns in 
+# the final dataframe
+Gbm_annotations_all <- Gbm_datasets_filtered %>%
+  left_join(Gbm_annotations_organism_part, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_cell_type, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_dev_stage, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_treatment, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_disease, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_dis_model, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_geno, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_strain, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_sex, by = "experiment.shortName") %>%
+  left_join(Gbm_annotations_factor, by = "experiment.shortName") %>%
+
   # Add empty columns to store screening notes 
   mutate(Manipulation_unrelated_to_topic = 
            vector(mode = "character", length = nrow(.)), 
@@ -387,155 +429,31 @@ gbm_annotations_all <- gbm_datasets_filtered %>%
            vector(mode = "character", length = nrow(.)))
 
 # Transform the annotations into characters
-gbm_annotations_all$Organism_part <- as.character(gbm_annotations_all$Organism_part)
-gbm_annotations_all$Cell_type <- as.character(gbm_annotations_all$Cell_type)
-gbm_annotations_all$Developmental_stage <- as.character(gbm_annotations_all$Developmental_stage)
-gbm_annotations_all$Treatment <- as.character(gbm_annotations_all$Treatment)
-gbm_annotations_all$Disease <- as.character(gbm_annotations_all$Disease)
-gbm_annotations_all$Disease_model <- as.character(gbm_annotations_all$Disease_model)
-gbm_annotations_all$Genotype <- as.character(gbm_annotations_all$Genotype)
-gbm_annotations_all$Strain <- as.character(gbm_annotations_all$Strain)
-gbm_annotations_all$Biological_sex <- as.character(gbm_annotations_all$Biological_sex)
+Gbm_annotations_all$Organism_part <- as.character(Gbm_annotations_all$Organism_part)
+Gbm_annotations_all$Cell_type <- as.character(Gbm_annotations_all$Cell_type)
+Gbm_annotations_all$Developmental_stage <- as.character(Gbm_annotations_all$Developmental_stage)
+Gbm_annotations_all$Treatment <- as.character(Gbm_annotations_all$Treatment)
+Gbm_annotations_all$Disease <- as.character(Gbm_annotations_all$Disease)
+Gbm_annotations_all$Disease_model <- as.character(Gbm_annotations_all$Disease_model)
+Gbm_annotations_all$Genotype <- as.character(Gbm_annotations_all$Genotype)
+Gbm_annotations_all$Strain <- as.character(Gbm_annotations_all$Strain)
+Gbm_annotations_all$Biological_sex <- as.character(Gbm_annotations_all$Biological_sex)
 
 # Extract the final dataframe into CSV
-# write_csv(gbm_annotations_all, "All_datasets_with_annotations.csv")
+write_csv(Gbm_annotations_all, "All_datasets_with_annotations.csv")
 # str(gbm_annotations_all)
 ```
 
-
-### 5) Extraction of Statistical Contrasts of Differential Analysis in Each Dataset
-
-For the meta-analysis, we will be extracting the differential expression results 
-from Gemma. The differential expression results for each dataset may include multiple 
-statistical contrasts (e.g., drug1 vs. vehicle, drug2 vs. vehicle). Each of these 
-contrasts are labeled with a result ID and contrast ID within the Gemma database. 
-
-We will need to know which of these IDs are relevant to our project goals to 
-easily extract their results.
-
-We will also need to double-check that these statistical contrasts are set up in 
-a manner that makes sense for our experiments:
-
-First, for experiments that include more than one brain region, we will need to 
-double-check that the results have been subsetted by brain region (instead of 
-including brain region ("OrganismPart") as a factor in the model). If they have not 
-been subsetted by region, we will probably need to re-run the differential expression 
-analysis.
-
-Depending on the goals of the meta-analysis, we may also need to re-run the differential 
-expression analysis to remove other unwanted subjects (e.g., removing subjects with 
-genotypes that might interfere with our results)
-
-Second, we will need to double-check that the comparisons include an appropriate 
-reference group - sometimes they are reversed in Gemma (e.g., having the drug treatment 
-set as the baseline, with vehicle as the manipulation). If this is the case, we 
-will need to invert the effects when we input them into our meta-analysis 
-(multiply the effects by -1).
-
-```{r extract_contrast, cache = TRUE}
-# Create a function to extract statistical contrasts of differential analysis 
-# in each dataset 
-extract_contrasts <- function(dataset_shortname){
-  
-  # Create a dataframe to store the results 
-  resultsets_toscreen <- data.frame(
-    experiment.shortName = dataset_shortname,
-    ResultSetIDs = "NA",
-    ContrastIDs = "NA",
-    ExperimentIDs = "NA",
-    FactorCategory = "NA",
-    ExperimentalFactors = "NA",
-    BaselineFactors = "NA",
-    Subsetted = FALSE,
-    SubsetBy = "NA",
-    stringsAsFactors = FALSE
-  )
-  
-  # Loop through each of the datasets 
-  for (i in c(1:length(dataset_shortname))){
-    
-    # Extract the differential expression analysis from the datasets 
-    design <- get_dataset_differential_expression_analyses(dataset_shortname[i])
-    
-    # Check if the design dataframe has rows
-    if (nrow(design) > 0){
-    
-      # Create the vectors to store the experimental and baseline factors
-      experimental_factors <- vector(mode = "character", length = nrow(design))
-      baseline_factors <- vector(mode = "character", length = nrow(design))
-      
-      # Loop through each result.ID in the design dataframe
-      for (j in c(1:length(design$result.ID))){
-        
-        # Concatenate the experimental factors into a single string
-        experimental_factors[j] <- paste(design$experimental.factors[[j]]$summary, 
-                                         collapse = ";")
-        
-        # Concatenate the baseline factors into a single string 
-        baseline_factors[j] <- paste(design$baseline.factors[[j]]$summary, 
-                                     collapse = ";")
-      }
-      
-      # Create a vector to store subset information
-      SubsetBy <- vector(mode = "character", length = nrow(design))
-      
-      # Check if the design dataframe is subsetted or not
-      if(design$isSubset[1] == TRUE) {
-        
-        # Loop through each result.ID to extract and concatenate subset information
-        for (j in c(1:length(design$result.ID))){
-          SubsetBy[j] <- paste(design$subsetFactor[[j]]$summary, 
-                               collapse = ";")
-        } 
-      }  else {
-          # If not subsetted, fill the SubsetBy vector with NA values 
-          SubsetBy <- rep(NA, length(design$result.ID))
-        }
-        
-        # Append the extracted information to the initial dataframe
-        resultsets_toscreen <- rbind(resultsets_toscreen, data.frame(
-          experiment.shortName = dataset_shortname,
-          ResultSetIDs = design$result.ID,
-          ContrastIDs = design$contrast.ID,
-          ExperimentIDs = design$experiment.ID,
-          FactorCategory = design$factor.category,
-          ExperimentalFactors = experimental_factors,
-          BaselineFactors = baseline_factors,
-          Subsetted = design$isSubset,
-          SubsetBy = SubsetBy,
-          stringsAsFactors = FALSE
-        ))
-      }
-    }
-    
-    # Add empty columns to store screening notes 
-    resultsets_toscreen <- cbind(
-      resultsets_toscreen,
-      Include = vector(mode="character", length = nrow(resultsets_toscreen)),
-      WrongBaseline = vector(mode="character", length = nrow(resultsets_toscreen)),
-      ResultsNotRegionSpecific = vector(mode="character", length = nrow(resultsets_toscreen)),
-      ReAnalyze = vector(mode="character", length = nrow(resultsets_toscreen)),
-      stringAsFactors = FALSE
-    )
-    
-    # Remove the initial placeholder row 
-    resultsets_toscreen <- resultsets_toscreen[-1,]
-    
-    # Return the final dataframe 
-    return(resultsets_toscreen)
-  }
-
-# Example use
-# extract_contrasts("GSE84183")
-```
+Through initial selection process, 6 datasets are possible, including: GSE154958,
+GSE15209, GSE45899, GSE135306, GSE4536, GSE75147
 
 
-### 6) Gene Expression Range Assessment
+### 5) Gene Expression Range Assessment
 
-```{r assess_gene_express, cache = TRUE}
+```{r func_check_gene_express}
 # Create a function to check the expression range of the dataset 
 # (especially for the Agilent microarray datasets)
-check_expression <- function(dataset_shortname){
+CheckGeneExpressionRange <- function(dataset_shortname){
   
   # Retrieve the processed expression data for the given dataset
   expression_data <- get_dataset_processed_expression(dataset_shortname)
@@ -565,17 +483,761 @@ check_expression <- function(dataset_shortname){
   # Log 2 Microarray dataset has the range between 4 to 15
   
   # Calculate the min, median, max values of the expression data
-  min_val <- min(expression_matrix)
-  median_val <- median(expression_matrix)
-  max_val <- max(expression_matrix)
+  min_val <- min(expression_matrix, na.rm = TRUE)
+  median_val <- median(expression_matrix, na.rm = TRUE)
+  max_val <- max(expression_matrix, na.rm = TRUE)
   
   # Print the calculated values
   print(paste("Minimum value:", min_val))
   print(paste("Median value:", median_val))
   print(paste("Maximum value:", max_val))
 }
-
-# Example use 
-# check_expression("GSE81672")
 ```
+
+
+```{r run_check_gene_express, cache = TRUE}
+# Function use 
+CheckGeneExpressionRange("GSE154958") # Min: -4.9 | Max: 14.1 | RNA-seq 
+CheckGeneExpressionRange("GSE15209") # Min: 2.7 | Max: 14.8 | Affymetrix Array
+CheckGeneExpressionRange("GSE45899") # Min: 3.6 | Max: 15.2 | Affymetrix Array
+CheckGeneExpressionRange("GSE135306") # Min: -5.9 | Max: 13.5 | RNA-Seq
+CheckGeneExpressionRange("GSE4536") # Min: 3.7 | Max: 14.6 | Affymetrix Array
+CheckGeneExpressionRange("GSE75147") # Min: -5.9 | Max: 13.3 | RNA-Seq
+```
+
+Gene expression of all 6 datasets seem to be within normal range and have appropriate
+distribution.
+
+
+### 6) Extraction of Statistical Contrasts of Differential Analysis in Each Dataset
+
+For the meta-analysis, we will be extracting the differential expression results 
+from Gemma. The differential expression results for each dataset may include 
+multiple result sets (e.g., one result set for the subset of the data from the 
+hippocampus, one result set for frontal cortex). Each of these result sets may 
+have multiple statistical contrasts (e.g., drug1 vs. vehicle, drug2 vs. vehicle). 
+Therefore, each of the statistical contrasts is labeled with a result ID and 
+contrast ID within the Gemma database. We will need to know which of these IDs 
+are relevant to our project goals to easily extract their results.
+
+We will also need to double-check that these statistical contrasts are set up in 
+a manner that makes sense for our experiments:
+
+1. For experiments that include more than one brain region, we will need to 
+double-check that the results have been subsetted by brain region (instead of 
+including brain region ("OrganismPart") as a factor in the model). If they have 
+not been subsetted by region, we will probably need to re-run the differential 
+expression analysis.
+
+2. Depending on the goals of the meta-analysis, we may also need to re-run the 
+differential expression analysis to remove other unwanted subjects (e.g., removing 
+subjects with genotypes that might interfere with our results).
+
+3. We will need to double-check that the comparisons include an appropriate 
+reference group - sometimes they are reversed in Gemma (e.g., having the drug 
+treatment set as the baseline, with vehicle as the manipulation). If this is the 
+case, we will need to invert the effects when we input them into our meta-analysis 
+(multiply the effects by -1).
+
+
+```{r func_contrast_extract}
+# Create a function to extract statistical contrasts of differential analysis 
+# in each dataset 
+GettingResultSetInfoForDatasets <- function(ExperimentIDs) {
+  
+  # Create a dataframe to store the results 
+  resultsets_toscreen <- data.frame(
+    ExperimentIDs = character(),
+    ResultSetIDs = character(),
+    ContrastIDs = character(),
+    FactorCategory = character(),
+    ExperimentalFactors = character(),
+    BaselineFactors = character(),
+    Subsetted = logical(),
+    SubsetBy = character(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Loop through each of the datasets 
+  for (i in c(1:length(ExperimentIDs))) {
+    
+    # Extract the differential expression analysis from the datasets 
+    design <- get_dataset_differential_expression_analyses(ExperimentIDs[i])
+    
+    # Check if the design dataframe has rows
+    if (nrow(design) > 0) {
+      
+      # Create the vectors to store the experimental and baseline factors
+      experimental_factors <- vector(mode = "character", length = nrow(design))
+      baseline_factors <- vector(mode = "character", length = nrow(design))
+      
+      # Loop through each result.ID in the design dataframe
+      for (j in c(1:nrow(design))) {
+        
+        # Concatenate the experimental factors into a single string
+        experimental_factors[j] <- paste(design$experimental.factors[[j]]$summary, 
+                                         collapse = ";")
+        
+        # Concatenate the baseline factors into a single string 
+        baseline_factors[j] <- paste(design$baseline.factors[[j]]$summary, 
+                                     collapse = ";")
+      }
+      
+      # Create a vector to store subset information
+      SubsetBy <- vector(mode = "character", length = nrow(design))
+      
+      # Check if the design dataframe is subsetted or not
+      if (design$isSubset[1] == TRUE) {
+        
+        # Loop through each result.ID to extract and concatenate subset information
+        for (j in c(1:nrow(design))) {
+          SubsetBy[j] <- paste(design$subsetFactor[[j]]$summary, collapse = ";")
+        } 
+      } else {
+        # If not subsetted, fill the SubsetBy vector with NA values 
+        SubsetBy <- rep(NA, length(design$result.ID))
+      }
+      
+      # Create a temporary dataframe to store extracted info
+      resultsets_for_experiment <- data.frame(
+        ExperimentIDs = ExperimentIDs[i],
+        ResultSetIDs = design$result.ID,
+        ContrastIDs = design$contrast.ID,
+        FactorCategory = design$factor.category,
+        ExperimentalFactors = experimental_factors,
+        BaselineFactors = baseline_factors,
+        Subsetted = design$isSubset,
+        SubsetBy = SubsetBy,
+        stringsAsFactors = FALSE
+      )
+      
+      # Append the temporary dataframe with the dataframe created initially
+      resultsets_toscreen <- rbind(resultsets_toscreen, resultsets_for_experiment)
+      
+    }
+  }
+  
+  # Add empty columns to store screening notes 
+  resultsets_toscreen <- cbind(
+    resultsets_toscreen,
+    Include = vector(mode = "character", length = nrow(resultsets_toscreen)),
+    WrongBaseline = vector(mode = "character", length = nrow(resultsets_toscreen)),
+    ResultsNotRegionSpecific = vector(mode = "character", length = nrow(resultsets_toscreen)),
+    ReAnalyze = vector(mode = "character", length = nrow(resultsets_toscreen)),
+    stringsAsFactors = FALSE
+  )
+  
+  # Export the final dataframe into the working directory
+  write.csv(resultsets_toscreen, "ResultSets_toScreen.csv")
+  
+  # Print a message to indicate that the results have been saved 
+  print("Output object: ResultSets_toScreen.csv")
+}
+```
+
+
+```{r run_contrast_extract, cache = TRUE}
+# Set up a vector of the names of all datasets
+ExperimentIDs <- c("GSE154958", "GSE15209", "GSE45899", 
+                   "GSE135306", "GSE4536","GSE75147")
+
+# Function use
+GettingResultSetInfoForDatasets(ExperimentIDs)
+```
+
+
+Through secondary selection process, contrast 40036 of GSE15209, contrast 94018 of
+GSE45899, contrast 121770 and 121772 of GSE75147 were included in the meta-analysis.
+
+
+### 7) Downloading the DE Results from Each Dataset
+
+```{r func_download_DEResults}
+# Create a function to download DE results and extract Log2FC and T-statistics 
+# for contrasts of interest 
+DownloadingDEResults <- function(ResultSets_contrasts){
+  
+  # Identify the unique ResultSet IDs
+  # Some ResultSets may have multiple statistical contrasts, but we only want unique ResultSet IDs
+  UniqueResultSetIDs <- unique(ResultSets_contrasts$ResultSetIDs) 
+  
+  # Print the identified unique ResultSet IDs
+  print("ResultSets identified as being of interest:")
+  print(UniqueResultSetIDs)
+  
+  # Download DE results for each unique ResultSet ID
+  differentials <- UniqueResultSetIDs %>%
+    # The function returns a list because single experiment may have multiple 
+    # resultSets
+    # Only take the first element of the output
+    # The "resultSet" argument is used to directly access the results we need
+    lapply(function(x) {get_differential_expression_values(resultSets = x)[[1]]})
+  
+  # Some datasets might not have all the advertised DE results due to a variety of
+  # so we need to remove empty differential (only keep differential with rows present)
+  non_missing_contrasts <- sapply(differentials, function(df) nrow(df) > 0)
+  
+  # Return the "differentials" object that contains the DE results of contrast of interest
+  differentials <<- differentials[non_missing_contrasts] 
+  UniqueResultSetIDs <<- UniqueResultSetIDs[non_missing_contrasts]
+  
+  # Print the ResultSet IDs that had DE results
+  print("ResultSets that had DE results:")
+  print(UniqueResultSetIDs)
+  
+  # Print a message to inform the structure of the output "differentials"
+  print("Your DE results for each of the ResultSets are stored in object differentials.")
+  print("This object is structured as a list of dataframes.")
+  print("Each element in the list represents a ResultSet, with the dataframe containing DE results")
+  
+  # Extract the effect sizes of Log2FC of contrasts of interest
+  print("Columns of effect sizes (Log2FC) for contrasts of interest:")
+  Contrasts_Log2FC <- paste("contrast_", ResultSets_contrasts$ContrastIDs, 
+                             "_log2fc", sep = "")
+  print(Contrasts_Log2FC)
+  
+  # Extract the T-statistics of contrasts of interest for calculating sampling variances
+  print("Columns of T-statistics for contrasts of interest:")
+  Contrasts_Tstat <- paste("contrast_", ResultSets_contrasts$ContrastIDs,
+                            "_tstat", sep = "")
+  print(Contrasts_Tstat)
+  
+  # Remove the temporary Log2FC and T-statistics of contrast of interest
+  rm(Contrasts_Log2FC, Contrasts_Tstat)
+}
+```
+
+
+```{r run_download_DEResults, cache = TRUE}
+# Import the CSV file with contrasts of interest
+ResultSets_contrasts <- read.csv("ResultSets_Screened.csv", 
+                                 header = TRUE, stringsAsFactors = FALSE)
+# Function use
+DownloadingDEResults(ResultSets_contrasts)
+
+# Contrast 94078 in GSE45889 compares neural stem cells (NSC) vs glioblastoma stem
+# cells (GSC), which is opposite in direction to the other datasets. To align the
+# comparisons (GSC vs NSC), we reverse the coefficient, T-statistic, and Log2FC 
+# for consistency across all datasets.
+
+# Access DE results of GSE45889 from "differentials" object
+GSE45889 <- differentials[[2]]
+
+# Reverse the coefficient, Tstat, and Log2FC of contrast 94074 
+GSE45889$contrast_94074_coefficient <- -1*GSE45889$contrast_94074_coefficient
+GSE45889$contrast_94074_log2fc <- -1*GSE45889$contrast_94074_log2fc
+GSE45889$contrast_94074_tstat <- -1*GSE45889$contrast_94074_tstat
+
+# Reverse the coefficient, Tstat, and Log2FC of contrast 94076 
+GSE45889$contrast_94076_coefficient <- -1*GSE45889$contrast_94076_coefficient
+GSE45889$contrast_94076_log2fc <- -1*GSE45889$contrast_94076_log2fc
+GSE45889$contrast_94076_tstat <- -1*GSE45889$contrast_94076_tstat
+
+# Reverse the coefficient, Tstat, and Log2FC of contrast 94077
+GSE45889$contrast_94077_coefficient <- -1*GSE45889$contrast_94077_coefficient
+GSE45889$contrast_94077_log2fc <- -1*GSE45889$contrast_94077_log2fc
+GSE45889$contrast_94077_tstat <- -1*GSE45889$contrast_94077_tstat 
+
+# Reverse the coefficient, Tstat, and Log2FC of contrast 94078
+GSE45889$contrast_94078_coefficient <- -1*GSE45889$contrast_94078_coefficient
+GSE45889$contrast_94078_log2fc <- -1*GSE45889$contrast_94078_log2fc
+GSE45889$contrast_94078_tstat <- -1*GSE45889$contrast_94078_tstat 
+
+# Replace the original dataset with the reversed one
+differentials[[2]] <- GSE45889
+
+# Remove the temporary reversed dataset
+rm(GSE45889)
+
+# Check the structure of the "differentials" object
+str(differentials)
+```
+
+
+```{r func_save_DEResults}
+# Create a function to save DE results for each ResultSet
+SavingGemmaDEResults_forEachResultSet <- function(differentials, 
+                                                  UniqueResultSetIDs, 
+                                                  ResultSets_contrasts){
+    
+  # Loop through each dataset (list element) in "differentials" object
+  for (i in c(1:length(differentials))){
+    
+    # Get the current ResultSet ID
+    ThisResultSet <- UniqueResultSetIDs[i]
+    
+    # Get the dataset ID corresponding to the current ResultSet ID
+    # Some datasets have multiple ResultSets, so take the dataset ID from the 
+    # first matching entry
+    ThisDataSet <- ResultSets_contrasts$ExperimentID[ResultSets_contrasts$ResultSetIDs == ThisResultSet][1] 
+    
+    # Export the DE results for the current ResultSet ID into the working directory
+    write.csv(differentials[[i]], paste("DEResults_", ThisDataSet, "_", ThisResultSet, ".csv", sep=""))
+    
+    # Remove the temporary IDs
+    rm(ThisDataSet, ThisResultSet)
+   }
+  
+  # Print a message to indicate the DE results have been exported into working directory
+  print("Output object: DEResults_Dataset ID_ResultSet ID")
+}
+```
+
+
+```{r run_save_DEResults, cache = TRUE}
+# Function use
+SavingGemmaDEResults_forEachResultSet(differentials, 
+                                      UniqueResultSetIDs,
+                                      ResultSets_contrasts)
+```
+
+
+### 8) Filter of DE results for rows with good gene annotation
+
+```{r func_gene_filter}
+# Create a function to filter for rows with good gene annotation 
+FilteringDEResults_GoodAnnotation <- function(DE_Results){
+  
+  # Print the total number of rows in the DE results
+  print("# of rows in results")
+  print(nrow(DE_Results))
+  
+  # Print the number of rows with missing NCBI annotation
+  print("# of rows with missing NCBI annotation:")
+  print(sum(DE_Results$NCBIid == "" | DE_Results$NCBIid == "null", na.rm = TRUE))
+  
+  # Print the number of rows with NA NCBI annotation
+  print("# of rows with NA NCBI annotation:")
+  print(sum(is.na(DE_Results$NCBIid)))
+  
+  # Print the number of rows with missing Gene Symbol annotation
+  print("# of rows with missing Gene Symbol annotation:")
+  print(sum(DE_Results$GeneSymbol == ""| DE_Results$GeneSymbol == "null", na.rm = TRUE))
+  
+  # Print the number of rows mapped to multiple NCBI IDs
+  print("# of rows mapped to multiple NCBI IDs:")
+  print(length(grep('\\|', DE_Results$NCBIid)))
+  
+  # Print the number of rows mapped to multiple Gene Symbols
+  print("# of rows mapped to multiple Gene Symbols:")
+  print(length(grep('\\|', DE_Results$GeneSymbol)))
+  
+  # Subset data containing rows with valid NCBI EntrezID (non-empty and non-null)
+  DE_Results_NoNA <- DE_Results[(DE_Results$NCBIid == "" | 
+                                 DE_Results$NCBIid == "null") == FALSE & 
+                                 is.na(DE_Results$NCBIid) == FALSE,]
+  
+  # Subset data annotated with a single gene (not ambiguously mapped to more 
+  # than one gene)
+  if(length(grep('\\|', DE_Results_NoNA$NCBIid)) == 0){
+    # If there are no rows with multiple NCBI IDs, use the current subset
+    DE_Results_GoodAnnotation <- DE_Results_NoNA
+  } else {
+    # Extract only rows annotated with a single Gene Symbol (no pipe character '|')
+    DE_Results_GoodAnnotation <- DE_Results_NoNA[-(grep('\\|', DE_Results_NoNA$NCBIid)),]
+  }
+
+  # Print the number of rows with good annotation
+  print("# of rows with good annotation")
+  print(nrow(DE_Results_GoodAnnotation))
+  
+  # Get the name of the input object as a string for file naming
+  ID <- deparse(substitute(DE_Results))
+  
+  # Export the DE results with good annotations into the working directory
+  write.csv(DE_Results_GoodAnnotation, paste(ID, "_GoodAnnotation.csv", sep = ""))
+  
+  # Remove the temporary DE result objects
+  rm(DE_Results_NoNA, DE_Results)
+  
+  # Print a message to the DE results with good annotations have been exported 
+  # into working directory 
+  print(paste("Output object:", ID, "_GoodAnnotation.csv", sep = ""))
+  
+  # Return the DE results with good annotation into the environment
+  return(DE_Results_GoodAnnotation)
+}
+```
+
+
+```{r run_gene_filter, cache = TRUE}
+# Separate the DE results from object "differentials"
+DEResults_GSE15209 <- differentials[[1]]
+DEResults_GSE45899 <- differentials[[2]]
+DEResults_GSE75147 <- differentials[[3]]
+
+
+# Function use
+DE_Results_GSE15209_GoodAnnotation <- FilteringDEResults_GoodAnnotation(DEResults_GSE15209)
+DE_Results_GSE45899_GoodAnnotation <- FilteringDEResults_GoodAnnotation(DEResults_GSE45899)
+DE_Results_GSE75147_GoodAnnotation <- FilteringDEResults_GoodAnnotation(DEResults_GSE75147)
+
+# Check the structure of the DE results with good annotations 
+# str(DE_Results_GSE15209_GoodAnnotation)
+# str(DE_Results_GSE45899_GoodAnnotation)
+# str(DE_Results_GSE75147_GoodAnnotation)
+```
+
+
+### 9) Extraction of DE results for the contrasts of interest
+
+```{r func_extract_contrastID}
+# Create a function to extract the contrast ID from FC column names 
+GetContrastIDsforResultSet <- function(NamesOfFoldChangeColumns){
+  
+  # Split the column names using the underscore as a delimiter
+  # The result is a list where each element is a vector of the split parts of 
+  # each column name
+  ColumnNames_BrokenUp <- strsplit(NamesOfFoldChangeColumns, "_")
+  
+  # Convert the list of split names to a matrix
+  MatrixOfColumnNames_BrokenUp <- do.call(rbind, ColumnNames_BrokenUp)
+  
+  # Extract the contrast IDs in the second column
+  ContrastIDs_inCurrentDF <- MatrixOfColumnNames_BrokenUp[, 2]
+  
+  # Return the extracted contrast ID
+  return(ContrastIDs_inCurrentDF)
+}
+```
+
+
+```{r func_extract_contrast_DEResults}
+# Create a function to extract DE results for contrasts of interest
+ExtractingDEResultsForContrasts <- function(DE_Results_GoodAnnotation, 
+                                            Contrasts_Log2FC, 
+                                            Contrasts_Tstat, 
+                                            ResultSet_contrasts){
+  
+    # Print the column names in the DE results with good annotations for the 
+    # current ResultSet
+    print("Columns in the DE results for the current ResultSet:")
+    print(colnames(DE_Results_GoodAnnotation))
+  
+    # Print the column names that correspond to Log2FC values for contrasts of interest
+    print("Columns of Log2FC for contrasts of interest within the DE results for the current ResultSet:")
+    NamesOfFoldChangeColumns <- colnames(DE_Results_GoodAnnotation)[colnames(DE_Results_GoodAnnotation) %in% Contrasts_Log2FC]
+    print(NamesOfFoldChangeColumns)
+  
+    # Print the column names that correspond to T-statistics values for contrasts of interest
+    print("Columns of T-statistics for contrasts of interest within the DE results for the current ResultSet:")
+    NamesOfTstatColumns <- colnames(DE_Results_GoodAnnotation)[colnames(DE_Results_GoodAnnotation) %in% Contrasts_Tstat]
+    print(NamesOfTstatColumns)
+  
+    # Extract contrast IDs from FC column names using the function "GetContrastIDsforResultSet"
+    ContrastIDs_inCurrentDF <- GetContrastIDsforResultSet(NamesOfFoldChangeColumns)
+    print("Contrast IDs for contrasts of interest within the current ResultSet:")
+    print(ContrastIDs_inCurrentDF)
+  
+    # Extract dataset IDs for contrasts of interest
+    DatasetIDs <- ResultSet_contrasts$ExperimentID[ResultSet_contrasts$ContrastIDs %in% ContrastIDs_inCurrentDF]
+    print("Dataset ID for the ResultSet and contrasts:")
+    print(DatasetIDs)
+  
+    # Extract experimental factors for contrasts of interest
+    Factors_inCurrentDF <- ResultSet_contrasts$ExperimentalFactors[ResultSet_contrasts$ContrastIDs %in% ContrastIDs_inCurrentDF]
+    print("Experimental factors for ResultSet and contrasts:")
+    print(Factors_inCurrentDF)
+  
+    # Combine dataset IDs and experimental factors to create unique identifiers 
+    # for each statistical comparison
+    ComparisonsOfInterest <- paste(DatasetIDs, Factors_inCurrentDF, sep = "_")
+    print("Current names of contrasts of interest")
+    print(ComparisonsOfInterest)
+  
+    # Create a list to store extracted DE results and relevant metadata
+    DE_result_contrast <- list(
+      All_Columns = colnames(DE_Results_GoodAnnotation),
+      NamesOfFoldChangeColumns = NamesOfFoldChangeColumns,
+      NamesOfTstatColumns = NamesOfTstatColumns,
+      Contrast_ID = ContrastIDs_inCurrentDF,
+      Dataset_ID = DatasetIDs,
+      Experimental_Factor = Factors_inCurrentDF,
+      ComparisonsOfInterest = ComparisonsOfInterest
+  )
+    # Return the list of all extracted info
+    return(DE_result_contrast)
+}
+```
+
+
+```{r func_extract_contrast_stat}
+# Create a function to extract the Log2FC and T-statistics of contrast of interest
+GetContrastStatColumns <- function(ResultSets_contrasts){
+  
+  # Extract the effect sizes (Log2FC) of contrasts of interest
+  Contrasts_Log2FC <- paste("contrast_", ResultSets_contrasts$ContrastIDs, "_log2fc", sep = "")
+
+  # Extract the T-statistics of contrasts of interest for calculating sampling variances
+  Contrasts_Tstat <- paste("contrast_", ResultSets_contrasts$ContrastIDs, "_tstat", sep = "")
+
+  # Create a dataframe to store the extracted information
+  Contrasts_Stat <- data.frame(
+    ExperimentID = ResultSets_contrasts$ExperimentIDs,
+    ContrastID = ResultSets_contrasts$ContrastIDs,
+    Log2FC_Column = Contrasts_Log2FC,
+    Tstat_Column = Contrasts_Tstat,
+    stringsAsFactors = FALSE
+  )
+  
+  # Return the resulting dataframe
+  return(Contrasts_Stat)
+}
+```
+
+
+```{r run_extract_contrast_stat, cache = TRUE}
+# Function use
+Contrasts_Stat_Columns <- GetContrastStatColumns(ResultSets_contrasts)
+```
+
+
+```{r prep_contrast_stat, cache = TRUE}
+# Prepare "Contrast_Log2FC" and "Contrast_Tstat" arguments for extracting DE results 
+# of contrasts of interest
+
+# GSE15209
+Contrasts_Log2FC_GSE15209 <- Contrasts_Stat_Columns %>%
+  filter(ExperimentID == "GSE15209") %>%
+  pull(Log2FC_Column)
+
+Contrasts_Tstat_GSE15209 <- Contrasts_Stat_Columns %>%
+  filter(ExperimentID == "GSE15209") %>%
+  pull(Tstat_Column)
+
+# GSE45899 
+Contrasts_Log2FC_GSE45899 <- Contrasts_Stat_Columns %>%
+  filter(ExperimentID == "GSE45899") %>%
+  pull(Log2FC_Column)
+
+Contrasts_Tstat_GSE45899 <- Contrasts_Stat_Columns %>%
+  filter(ExperimentID == "GSE45899") %>%
+  pull(Tstat_Column)
+
+# GSE75147
+Contrasts_Log2FC_GSE75147 <- Contrasts_Stat_Columns %>%
+  filter(ExperimentID == "GSE75147") %>%
+  pull(Log2FC_Column)
+
+Contrasts_Tstat_GSE75147 <- Contrasts_Stat_Columns %>%
+  filter(ExperimentID == "GSE75147") %>%
+  pull(Tstat_Column)
+```
+
+
+```{r run_extract_contrast_DEResults, cache = TRUE}
+# Function use
+
+# GSE15209
+DE_Results_Contrasts_GSE15209 <- ExtractingDEResultsForContrasts(DE_Results_GSE15209_GoodAnnotation,
+                                                                 Contrasts_Log2FC_GSE15209,
+                                                                 Contrasts_Tstat_GSE15209,
+                                                                 ResultSets_contrasts)
+
+# GSE45899
+DE_Results_Contrasts_GSE45899 <- ExtractingDEResultsForContrasts(DE_Results_GSE45899_GoodAnnotation,
+                                                                 Contrasts_Log2FC_GSE45899,
+                                                                 Contrasts_Tstat_GSE45899,
+                                                                 ResultSets_contrasts)
+
+# GSE75147
+DE_Results_Contrasts_GSE75147 <- ExtractingDEResultsForContrasts(DE_Results_GSE75147_GoodAnnotation,
+                                                                 Contrasts_Log2FC_GSE75147,
+                                                                 Contrasts_Tstat_GSE75147,
+                                                                 ResultSets_contrasts)
+```
+
+
+### 10) Collapse of DE results to one result per gene & Calculation of standard 
+### error and sampling variance
+
+Gene expression can be measured using multiple probes (microarray). Therefore,
+DE results need to be collapsed to one result per gene.
+
+Standard error of Log2FC = Log2FC/T-statistics
+
+Sampling variance = Average of standard error of each gene^2 
+
+
+```{r func_collapse_contrast_DEResults}
+# Create a function to average Log2FC, Tstat, standard error to one unique gene 
+# per dataset 
+CollapsingDEResults_OneResultPerGene<-function(GSE_ID, 
+                                               DE_Results_GoodAnnotation, 
+                                               ComparisonsOfInterest, 
+                                               NamesOfFoldChangeColumns, 
+                                               NamesOfTstatColumns){
+  
+  # Print a message to check if the vectors containing FC and T-stat column names 
+  # are in the same order as the comparisons of interest
+  print("Check if the vectors containing FC and Tstat column names contain the same order as the comparison of interest")
+  
+  # Print the number of unique NCBI IDs in the DE results
+  print("# of rows with unique NCBI IDs:")
+  print(length(unique(DE_Results_GoodAnnotation$NCBIid)))
+  
+  # Print the number of unique Gene Symbols in the DE results
+  print("# of rows with unique Gene Symbols:")
+  print(length(unique(DE_Results_GoodAnnotation$GeneSymbol)))
+  
+  # Create a folder named after the dataset ID to store results
+  dir.create(paste("./", "Collapsing_DEResults_", GSE_ID, sep=""))
+  
+  # Set the working directory to the newly created folder
+  setwd(paste("./", "Collapsing_DEResults_", GSE_ID, sep=""))
+  
+  # Create lists to store results
+  DE_Results_GoodAnnotation_FoldChange_Average <- list()
+  DE_Results_GoodAnnotation_Tstat_Average <- list()
+  DE_Results_GoodAnnotation_SE_Average <- list()
+  
+  # Loop through each column containing FC and T-statistic info for the contrasts of interest
+  for(i in c(1:length(NamesOfFoldChangeColumns))){
+    
+    # Select the Log2FC column of interest
+    FoldChangeColumn <- dplyr::select(DE_Results_GoodAnnotation, NamesOfFoldChangeColumns[i])
+    
+    # Select the T-stat column of interest
+    TstatColumn <- dplyr::select(DE_Results_GoodAnnotation, NamesOfTstatColumns[i])
+    
+    # Calculate the standard error (SE)
+    DE_Results_GoodAnnotation_SE <- FoldChangeColumn[[1]]/TstatColumn[[1]]
+    
+    # Calculate the average Log2FC per gene
+    DE_Results_GoodAnnotation_FoldChange_Average[[i]] <- tapply(FoldChangeColumn[[1]], 
+                                                                DE_Results_GoodAnnotation$NCBIid, 
+                                                                mean)
+    
+    # Calculate the average T-statistics per gene
+    DE_Results_GoodAnnotation_Tstat_Average[[i]] <- tapply(TstatColumn[[1]], 
+                                                           DE_Results_GoodAnnotation$NCBIid, 
+                                                           mean)
+    
+    # Calculate the average SE per gene
+    DE_Results_GoodAnnotation_SE_Average[[i]] <- tapply(DE_Results_GoodAnnotation_SE, 
+                                                        DE_Results_GoodAnnotation$NCBIid, 
+                                                        mean)
+    
+  }
+  
+  # Combine averaged Log2FC values into a single dataframe 
+  DE_Results_GoodAnnotation_FoldChange_AveragedByGene <- do.call(cbind, DE_Results_GoodAnnotation_FoldChange_Average)
+  
+  # Print the dimensions of the averaged Fold Change matrix
+  print("Dimensions of Fold Change matrix, averaged by gene symbol:")
+  print(dim(DE_Results_GoodAnnotation_FoldChange_AveragedByGene))
+  
+  # Name the columns in the dataframe to describe the contrast of interest
+  colnames(DE_Results_GoodAnnotation_FoldChange_AveragedByGene) <- ComparisonsOfInterest
+  
+  # Export the averaged Log2FC results into the working directory
+  write.csv(DE_Results_GoodAnnotation_FoldChange_AveragedByGene, 
+            paste("DEResults_", GSE_ID, "_GoodAnnotation_FoldChange_AveragedByGene.csv", sep = ""))
+  
+  # Combine T-statistics values into a single dataframe 
+  DE_Results_GoodAnnotation_Tstat_AveragedByGene<-do.call(cbind, DE_Results_GoodAnnotation_Tstat_Average)
+  
+  # Name the columns in the dataframe to describe the contrast of interest
+  colnames(DE_Results_GoodAnnotation_Tstat_AveragedByGene) <- ComparisonsOfInterest
+  
+  # Export the averaged T-statistics results into the working directory
+  write.csv(DE_Results_GoodAnnotation_Tstat_AveragedByGene, 
+            paste("DEResults_", GSE_ID, "_GoodAnnotation_Tstat_AveragedByGene.csv", sep = ""))
+  
+  # Combine SE values into a single dataframe 
+  DE_Results_GoodAnnotation_SE_AveragedByGene<-do.call(cbind, DE_Results_GoodAnnotation_SE_Average)
+  
+  # Name the columns in the dataframe to describe the contrast of interest
+  colnames(DE_Results_GoodAnnotation_SE_AveragedByGene) <- ComparisonsOfInterest
+  
+  # Export the averaged SE results into the working directory
+  write.csv(DE_Results_GoodAnnotation_SE_AveragedByGene, 
+            paste("DEResults_", GSE_ID, "_GoodAnnotation_SE_AveragedByGene.csv", sep = ""))
+  
+  # Calculate the sampling variance (SV) by squaring the SE
+  DE_Results_GoodAnnotation_SV <- (DE_Results_GoodAnnotation_SE_AveragedByGene)^2
+  
+  # Export the SV results into the working directory
+  write.csv(DE_Results_GoodAnnotation_SV, 
+            paste("DEResults_", GSE_ID, "_GoodAnnotation_SV.csv", sep = ""))
+  
+  # Compile all averaged results into a single list 
+  TempMasterResults<-list(Log2FC = DE_Results_GoodAnnotation_FoldChange_AveragedByGene,
+                          Tstat = DE_Results_GoodAnnotation_Tstat_AveragedByGene, 
+                          SE = DE_Results_GoodAnnotation_SE_AveragedByGene, 
+                          SV = DE_Results_GoodAnnotation_SV)
+  
+  # Print the name of the output
+  print(paste("Output: Collapsing_DEResults", GSE_ID, sep="_"))
+  
+  # Clean up the environment by removing temporary results
+  rm(DE_Results_GoodAnnotation, DE_Results_GoodAnnotation_SV, 
+     DE_Results_GoodAnnotation_SE, DE_Results_GoodAnnotation_FoldChange_AveragedByGene,
+     DE_Results_GoodAnnotation_FoldChange_Average, DE_Results_GoodAnnotation_Tstat_AveragedByGene,
+     DE_Results_GoodAnnotation_Tstat_Average, DE_Results_GoodAnnotation_SE_Average, 
+     FoldChangeColumn, TstatColumn, GSE_ID, ComparisonsOfInterest, NamesOfFoldChangeColumns, 
+     NamesOfTstatColumns)
+  
+  # Set the working directory back to the parent directory
+  setwd("../")
+  
+  # Return the compiled results
+  return(TempMasterResults)
+}
+```
+
+
+```{r prep_col_name, cache = TRUE}
+# Prepare "NamesOfFoldChangeColumns" and "NamesOfTstatColumns" arguments for  
+# extracting DE results of contrasts of interest
+
+# GSE15209
+# GSC cell lines: G144 (GBM), G166 (GBM), GliN2 (GBM), G179 (Giant cell GBM), 
+# G174 (anaplastic oligoastrocytoma)
+# NSC cell line: Fetal neural stem cells
+NamesOfFoldChangeColumns_GSE15209 <- DE_Results_Contrasts_GSE15209[[2]]
+NamesOfTstatColumns_GSE15209 <- DE_Results_Contrasts_GSE15209[[3]]
+ComparisonsOfInterest_GSE15209 <- c("GSE15209_G144/GBM_vs_Fetal NSC)", "GSE15209_G174/AnaOlig_vs_Fetal NSC")
+
+# GSE45899
+# GSC cell lines: MGG4 (GBM), MGG6 (GBM), MGG8 (GBM) 
+# NSC cell line: Human embryonic stem-derived neural stem cells 
+NamesOfFoldChangeColumns_GSE45899 <- DE_Results_Contrasts_GSE45899[[2]]
+NamesOfTstatColumns_GSE45899 <- DE_Results_Contrasts_GSE45899[[3]]
+ComparisonsOfInterest_GSE45899 <- c("GSE45899_MGG4/GBM_vs_Human embryonic NSC")
+
+# GSE75147
+# GSC cell lines: G144 (GBM), GSC-0827 (GBM)
+# NSC cell line: Fetal neural stem cells (CB660)
+NamesOfFoldChangeColumns_GSE75147 <- DE_Results_Contrasts_GSE75147[[2]]
+NamesOfTstatColumns_GSE75147 <- DE_Results_Contrasts_GSE75147[[3]]
+ComparisonsOfInterest_GSE75147 <- c("GSE75147_G166/GBM_vs_Fetal NSC", "GSE75147_GSC-0827/GBM_vs_Fetal NSC")
+```
+
+
+```{r run_collapse_contrast_DEResults, cache = TRUE}
+# Function use
+
+# GSE15209
+Collapsing_DEResults_GSE15209 <- CollapsingDEResults_OneResultPerGene("GSE15209",
+                                                                      DE_Results_GSE15209_GoodAnnotation,
+                                                                      ComparisonsOfInterest_GSE15209,
+                                                                      NamesOfFoldChangeColumns_GSE15209,
+                                                                      NamesOfTstatColumns_GSE15209)
+
+# GSE45899
+Collapsing_DEResults_GSE45899 <- CollapsingDEResults_OneResultPerGene("GSE45899",
+                                                                      DE_Results_GSE45899_GoodAnnotation,
+                                                                      ComparisonsOfInterest_GSE45899,
+                                                                      NamesOfFoldChangeColumns_GSE45899,
+                                                                      NamesOfTstatColumns_GSE45899)
+
+# GSE75147
+Collapsing_DEResults_GSE75147 <- CollapsingDEResults_OneResultPerGene("GSE75147",
+                                                                      DE_Results_GSE75147_GoodAnnotation,
+                                                                      ComparisonsOfInterest_GSE75147,
+                                                                      NamesOfFoldChangeColumns_GSE75147,
+                                                                      NamesOfTstatColumns_GSE75147)
+```
+
 
