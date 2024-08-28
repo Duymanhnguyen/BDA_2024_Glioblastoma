@@ -1,0 +1,3 @@
+"","ID","Description","GeneRatio","BgRatio","pvalue","p.adjust","qvalue","geneID","Count"
+"1","GO:0050768","negative regulation of neurogenesis","6/61","129/13413",2.53564743606854e-05,0.0309506424252403,0.0266952742149012,"5925/56963/8829/6663/4504/26022",6
+"2","GO:0051961","negative regulation of nervous system development","6/61","135/13413",3.27866974843648e-05,0.0309506424252403,0.0266952742149012,"5925/56963/8829/6663/4504/26022",6
