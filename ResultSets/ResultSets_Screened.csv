@@ -1,0 +1,6 @@
+,ExperimentIDs,ResultSetIDs,ContrastIDs,FactorCategory,ExperimentalFactors,BaselineFactors,Subsetted,SubsetBy,Include,WrongBaseline,ResultsNotRegionSpecific,ReAnalyze
+5,GSE15209,521206,40037,disease,glioblastoma,reference subject role has role control,FALSE,NA,,,,
+7,GSE15209,521206,40036,disease,oligoastrocytoma,reference subject role has role control,FALSE,NA,,,,
+11,GSE45899,515008,94078,cell line,neural stem cell,MGG4 derives from patient having disease glioblastoma,FALSE,NA,,,,
+28,GSE75147,524285,121772,cell line,G166 derives from patient having disease glioblastoma,CB660 derives from neural stem cell,FALSE,NA,,,,
+29,GSE75147,524285,121770,cell line,0827 derives from patient having disease glioblastoma,CB660 derives from neural stem cell,FALSE,NA,,,,
